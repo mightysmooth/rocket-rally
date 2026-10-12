@@ -148,11 +148,28 @@ export class CelestialBody {
     lanternMesh.position.set(-1.5, 23, -6);
     padGroup.add(lanternMesh);
 
+    // Warm gantry floodlight illuminating the rocket assembly
+    const gantryLight = new THREE.PointLight(0xffeedd, 3.5, 75, 0.6);
+    gantryLight.position.set(-1.5, 23, -6);
+    padGroup.add(gantryLight);
+
     // Campfire next to pad!
     const campfireMat = new THREE.MeshBasicMaterial({ color: 0xe76f51 });
     const campfireMesh = new THREE.Mesh(new THREE.ConeGeometry(1.2, 2.5, 6), campfireMat);
     campfireMesh.position.set(6, 2.2, 6);
     padGroup.add(campfireMesh);
+
+    // Cozy flickering campfire point light
+    const campfireLight = new THREE.PointLight(0xff9944, 2.4, 35, 0.8);
+    campfireLight.position.set(6, 4, 6);
+    padGroup.add(campfireLight);
+
+    // Launchpad fill light targeting the rocket
+    const padFillLight = new THREE.DirectionalLight(0xfffaea, 1.5);
+    padFillLight.position.set(12, 22, 14);
+    padFillLight.target.position.set(0, 5, 0);
+    padGroup.add(padFillLight);
+    padGroup.add(padFillLight.target);
 
     this.surfaceDecorations.add(padGroup);
 

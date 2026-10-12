@@ -14,11 +14,14 @@ export class SolarSystem {
   constructor(scene: THREE.Scene) {
     this.scene = scene;
 
-    // Cozy warm lighting
-    this.ambientLight = new THREE.AmbientLight(0x28324a, 1.2);
+    // Cozy warm lighting & hemisphere ambient fill
+    this.ambientLight = new THREE.AmbientLight(0x607590, 1.6);
     this.scene.add(this.ambientLight);
 
-    this.sunLight = new THREE.PointLight(0xfff4d6, 3.2, 8000, 0.4);
+    const hemiLight = new THREE.HemisphereLight(0xfffaea, 0x2d3a4a, 1.4);
+    this.scene.add(hemiLight);
+
+    this.sunLight = new THREE.PointLight(0xfff4d6, 3.8, 10000, 0.35);
     this.sunLight.castShadow = true;
     this.scene.add(this.sunLight);
 
@@ -204,16 +207,36 @@ export class SolarSystem {
     });
   }
 
+  // Smooth circular star particle sprite texture
+  private createStarTexture(): THREE.CanvasTexture {
+    const canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 32;
+    const ctx = canvas.getContext('2d')!;
+
+    const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    grad.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+    grad.addColorStop(0.25, 'rgba(255, 250, 220, 0.85)');
+    grad.addColorStop(0.6, 'rgba(255, 230, 180, 0.25)');
+    grad.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 32, 32);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    return texture;
+  }
+
   // Twinkling stars in deep space
   private createStarfield(): THREE.Points {
-    const starCount = 2800;
+    const starCount = 3200;
     const geom = new THREE.BufferGeometry();
     const positions = new Float32Array(starCount * 3);
     const colors = new Float32Array(starCount * 3);
 
     for (let i = 0; i < starCount; i++) {
-      // Uniform distribution on giant sphere
-      const r = 5000 + Math.random() * 2000;
+      // Uniform distribution on distant sphere well behind all planets and orbits
+      const r = 8000 + Math.random() * 3000;
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(Math.random() * 2 - 1);
 
@@ -245,10 +268,13 @@ export class SolarSystem {
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const mat = new THREE.PointsMaterial({
-      size: 14,
+      size: 2.2,
+      map: this.createStarTexture(),
       vertexColors: true,
       transparent: true,
-      opacity: 0.9,
+      opacity: 0.85,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
       sizeAttenuation: false
     });
 

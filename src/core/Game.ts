@@ -53,12 +53,17 @@ export class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMappingExposure = 1.25;
     container.appendChild(this.renderer.domElement);
 
-    // 2. Scene & Camera
+    // 2. Scene & Camera with camera-mounted soft fill light
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 12000);
+    this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 14000);
+
+    const cameraLight = new THREE.DirectionalLight(0xfff5e6, 1.2);
+    cameraLight.position.set(0, 2, 4);
+    this.camera.add(cameraLight);
+    this.scene.add(this.camera);
 
     // 3. Audio Engines
     this.soundSynth = new SoundSynth();
