@@ -112,19 +112,52 @@ export class ScrapbookUI {
     const gridBadges = document.getElementById('badges-grid');
     const gridPhotos = document.getElementById('photos-grid');
 
-    if (openBtn && modal) {
-      openBtn.addEventListener('click', () => {
+    const closeModal = () => {
+      if (modal) {
+        modal.classList.add('hidden');
+        this.soundSynth.playClick();
+      }
+    };
+
+    const openModal = () => {
+      if (modal) {
         modal.classList.remove('hidden');
         this.soundSynth.playClick();
+        this.render();
+      }
+    };
+
+    if (openBtn) {
+      openBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openModal();
       });
     }
 
-    if (closeBtn && modal) {
-      closeBtn.addEventListener('click', () => {
-        modal.classList.add('hidden');
-        this.soundSynth.playClick();
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeModal();
       });
     }
+
+    // Close when tapping outside the dialog on the backdrop
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          closeModal();
+        }
+      });
+    }
+
+    // Close with Escape key
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+        closeModal();
+      }
+    });
 
     if (tabBadges && tabPhotos && gridBadges && gridPhotos) {
       tabBadges.addEventListener('click', () => {
