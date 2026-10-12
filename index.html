@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#121826" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Rocket Rally 🚀 - Outer Space Adventure</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Grandstander:wght@600;800&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- 3D WebGL Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- UI Overlay Layer -->
+    <div id="ui-layer">
+      <!-- Top Status Bar -->
+      <header id="top-bar" class="hud-panel">
+        <div class="logo-badge">
+          <span class="icon">🚀</span>
+          <span class="title">ROCKET RALLY</span>
+        </div>
+        <div class="mission-status" id="mission-status">
+          <span class="status-dot"></span>
+          <span id="status-text">Assembly Hangar</span>
+        </div>
+        <div class="top-controls">
+          <button id="btn-audio" class="btn-icon" title="Toggle Music & Sound">
+            <span class="icon" id="audio-icon">🎵</span>
+          </button>
+          <button id="btn-scrapbook" class="btn-icon" title="My Space Badges & Photos">
+            <span class="icon">⭐</span>
+            <span class="badge-count" id="badge-count">0/8</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Builder View Overlay -->
+      <div id="builder-overlay" class="game-view-overlay active">
+        <!-- Builder Top Hint -->
+        <div class="builder-hint">
+          <span class="hint-icon">🛠️</span>
+          <span>Tap or drag parts to build your dream rocket!</span>
+        </div>
+
+        <!-- Rocket Customization Bar -->
+        <div class="rocket-custom-bar">
+          <input type="text" id="rocket-name-input" value="Little Wanderer" maxlength="18" placeholder="Rocket Name" />
+          <button id="btn-random-name" class="btn-pill" title="Randomize Name">🎲 New Name</button>
+          <div class="color-picker-group">
+            <span class="color-label">Style:</span>
+            <button class="color-swatch active" data-theme="campfire" style="background: linear-gradient(135deg, #e76f51, #f4a261);" title="Campfire Timber"></button>
+            <button class="color-swatch" data-theme="space" style="background: linear-gradient(135deg, #2a9d8f, #e9c46a);" title="Cosmic Emerald"></button>
+            <button class="color-swatch" data-theme="candy" style="background: linear-gradient(135deg, #e63946, #f1faee);" title="Candy Stripes"></button>
+            <button class="color-swatch" data-theme="neon" style="background: linear-gradient(135deg, #7209b7, #4cc9f0);" title="Neon Comet"></button>
+          </div>
+        </div>
+
+        <!-- Part Category Tabs -->
+        <div class="parts-category-tabs">
+          <button class="tab-btn active" data-category="capsule">🧑‍🚀 Capsules</button>
+          <button class="tab-btn" data-category="tank">⛽ Fuel Tanks</button>
+          <button class="tab-btn" data-category="engine">🔥 Engines</button>
+          <button class="tab-btn" data-category="booster">🚀 Boosters</button>
+          <button class="tab-btn" data-category="wings">🪽 Wings</button>
+          <button class="tab-btn" data-category="gadget">🦆 Fun Toys</button>
+        </div>
+
+        <!-- Parts Tray Carousel -->
+        <div id="parts-tray" class="parts-tray">
+          <!-- Dynamically populated -->
+        </div>
+
+        <!-- Builder Launch Button -->
+        <div class="builder-actions">
+          <button id="btn-clear-rocket" class="btn-secondary">🗑️ Reset</button>
+          <button id="btn-launch" class="btn-launch pulse-animation">
+            <span class="launch-rocket-icon">🚀</span>
+            <span>LAUNCH!</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Countdown Overlay -->
+      <div id="countdown-overlay" class="game-view-overlay hidden">
+        <div class="countdown-card">
+          <div id="countdown-number">3</div>
+          <div class="countdown-text">PREPARE FOR LIFTOFF!</div>
+        </div>
+      </div>
+
+      <!-- Flight HUD Overlay -->
+      <div id="flight-overlay" class="game-view-overlay hidden">
+        <!-- Flight Telemetry (Kid friendly) -->
+        <div class="telemetry-bar hud-panel">
+          <div class="telem-item">
+            <span class="telem-label">SPEED</span>
+            <span class="telem-val" id="telem-speed">0 <small>km/h</small></span>
+          </div>
+          <div class="telem-item">
+            <span class="telem-label">ALTITUDE</span>
+            <span class="telem-val" id="telem-altitude">0 <small>m</small></span>
+          </div>
+          <div class="telem-item" id="orbit-status-badge">
+            <span class="orbit-icon">🌍</span>
+            <span class="orbit-text" id="orbit-status-text">Sub-Orbital</span>
+          </div>
+          <div class="telem-item">
+            <span class="telem-label">TARGET</span>
+            <span class="telem-val highlight" id="telem-target">None</span>
+          </div>
+        </div>
+
+        <!-- Time Warp Controls -->
+        <div class="time-warp-bar hud-panel">
+          <span class="warp-label">⏰ Speed:</span>
+          <button class="btn-warp active" data-warp="1">1x</button>
+          <button class="btn-warp" data-warp="2">2x</button>
+          <button class="btn-warp" data-warp="5">5x</button>
+          <button class="btn-warp" data-warp="20">20x</button>
+          <button class="btn-warp" data-warp="100">100x</button>
+        </div>
+
+        <!-- Camera Switcher -->
+        <div class="camera-bar hud-panel">
+          <button id="btn-cam-rocket" class="btn-cam active" title="Follow Rocket">🚀 Close</button>
+          <button id="btn-cam-cockpit" class="btn-cam" title="Cockpit View">🧑‍🚀 Inside</button>
+          <button id="btn-cam-map" class="btn-cam" title="Solar System Map">🗺️ Map</button>
+          <button id="btn-cam-planet" class="btn-cam" title="Focus Planet">🪐 Planet</button>
+        </div>
+
+        <!-- Smart Guidance Assist (Kid-Friendly autopilot!) -->
+        <div class="guidance-bar">
+          <span class="guidance-title">Auto-Aim:</span>
+          <button id="btn-aim-prograde" class="btn-aim" title="Point forward along your orbit to speed up">⏩ Faster (Orbit)</button>
+          <button id="btn-aim-retrograde" class="btn-aim" title="Point backward to slow down">⏪ Slow Down</button>
+          <button id="btn-aim-target" class="btn-aim" title="Point nose right at chosen destination planet">🎯 Aim Target</button>
+        </div>
+
+        <!-- Target Destination Selector -->
+        <div class="target-selector-bar">
+          <span class="target-title">Fly To:</span>
+          <div class="target-chips" id="target-chips">
+            <!-- Dynamically populated buttons for Hearthstone, Mun, Red Mesa, Gigantus, Frostmoon, Comet -->
+          </div>
+        </div>
+
+        <!-- Stage Separation Button (Big & punchy) -->
+        <div class="staging-container hidden" id="staging-container">
+          <button id="btn-stage" class="btn-stage">
+            <span class="stage-icon">💥</span>
+            <span>DROP BOOSTERS!</span>
+          </button>
+        </div>
+
+        <!-- Main Touch Controls (Left: Steering Stick / D-Pad, Right: Boost Pedal) -->
+        <div class="flight-controls-container">
+          <!-- Left: Steering D-Pad / Virtual Thumbpad -->
+          <div class="steering-pod">
+            <button class="dpad-btn up" id="dpad-up">▲</button>
+            <div class="dpad-row">
+              <button class="dpad-btn left" id="dpad-left">◀</button>
+              <div class="dpad-center" id="dpad-center">🕹️</div>
+              <button class="dpad-btn right" id="dpad-right">▶</button>
+            </div>
+            <button class="dpad-btn down" id="dpad-down">▼</button>
+          </div>
+
+          <!-- Right: Big Boost Throttle -->
+          <div class="thrust-pod">
+            <button id="btn-cruise" class="btn-cruise-toggle" title="Keep Boost Locked On">
+              🔒 Cruise
+            </button>
+            <button id="btn-thrust" class="btn-thrust">
+              <div class="flame-glow"></div>
+              <span class="thrust-flame">🔥</span>
+              <span class="thrust-text">BOOST!</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Bottom Action Bar: Return to Hangar / Restart -->
+        <div class="flight-bottom-bar">
+          <button id="btn-return-hangar" class="btn-action-small">🛠️ Back to Builder</button>
+          <button id="btn-relaunch" class="btn-action-small">🔄 Re-Launch</button>
+          <button id="btn-snapshot" class="btn-action-small">📸 Snap Photo</button>
+        </div>
+      </div>
+
+      <!-- Landing & Surface Overlay -->
+      <div id="landing-overlay" class="game-view-overlay hidden">
+        <div class="landing-card celebration-animation">
+          <div class="landing-trophy">🏆✨</div>
+          <h2 id="landing-title">Touchdown on Cheesy Moon!</h2>
+          <p id="landing-desc">You made a safe landing! The little astronaut is ready to explore.</p>
+          <div class="landing-actions">
+            <button id="btn-plant-flag" class="btn-pill-large">🚩 Plant Flag</button>
+            <button id="btn-eva-hop" class="btn-pill-large">🧑‍🚀 Astronaut Hop</button>
+            <button id="btn-take-trophy-photo" class="btn-pill-large">📸 Souvenir Photo</button>
+            <button id="btn-liftoff-again" class="btn-pill-large highlight">🚀 Blast Off Again!</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scrapbook / Badges Modal -->
+      <div id="scrapbook-modal" class="modal-backdrop hidden">
+        <div class="modal-dialog">
+          <div class="modal-header">
+            <h2>⭐ Your Space Explorer Scrapbook</h2>
+            <button id="btn-close-scrapbook" class="btn-close">✖</button>
+          </div>
+          <div class="modal-content">
+            <div class="scrapbook-tabs">
+              <button class="tab-btn active" id="tab-badges">🏅 Mission Badges</button>
+              <button class="tab-btn" id="tab-photos">📷 Polaroid Photos</button>
+            </div>
+            <div id="badges-grid" class="badges-grid">
+              <!-- Dynamically populated badges -->
+            </div>
+            <div id="photos-grid" class="photos-grid hidden">
+              <!-- Dynamically populated snapshots -->
+              <p class="empty-photos-msg">No photos snapped yet! Press the 📸 camera button anytime during flight to capture cool polaroids!</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Photo Flash Overlay for Camera Snapshot effect -->
+      <div id="photo-flash" class="photo-flash hidden"></div>
+
+      <!-- Orbit Achievement Banner Notification -->
+      <div id="orbit-banner" class="banner-notification hidden">
+        <span class="banner-icon">🎉</span>
+        <div class="banner-content">
+          <strong id="banner-title">ORBIT ACHIEVED!</strong>
+          <span id="banner-sub">You are coasting peacefully in space around the planet!</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>

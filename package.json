@@ -1,0 +1,22 @@
+{
+  "name": "rocket-rally",
+  "version": "1.0.0",
+  "description": "A kid-friendly, Outer-Wilds-inspired, mobile Three.js space exploration game.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": ["threejs", "game", "ksp", "outer-wilds", "space", "kids"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.170.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.0"
+  }
+}
