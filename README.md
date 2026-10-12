@@ -98,3 +98,4 @@ The repository includes a ready-to-run GitHub Actions workflow (`.github/workflo
 
 ## 📄 License
 MIT License. Built with love for curious kids and cozy space explorers everywhere. 🚀✨
+

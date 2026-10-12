@@ -401,3 +401,4 @@ export class ProceduralTextures {
     ctx.fill();
   }
 }
+

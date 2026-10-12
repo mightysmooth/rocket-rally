@@ -14,3 +14,4 @@ window.addEventListener('DOMContentLoaded', () => {
   (window as unknown as { __ROCKET_RALLY_GAME__: Game }).__ROCKET_RALLY_GAME__ = game;
   console.log('🚀 Rocket Rally loaded successfully! Outer Wilds campfire awaits.');
 });
+

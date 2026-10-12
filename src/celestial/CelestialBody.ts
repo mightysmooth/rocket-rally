@@ -327,3 +327,4 @@ export class CelestialBody {
     this.surfaceDecorations.add(flagGroup);
   }
 }
+

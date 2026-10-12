@@ -341,3 +341,4 @@ export class SolarSystem {
     return { body: dominant, dist: minBodyDist };
   }
 }
+

@@ -260,3 +260,4 @@ export class ParticleEffects {
     this.confettiPoints.geometry.attributes.color.needsUpdate = true;
   }
 }
+
