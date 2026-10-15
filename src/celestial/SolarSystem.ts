@@ -61,7 +61,7 @@ export class SolarSystem {
       color: 0x3a7d44,
       orbitRadius: 650,
       orbitSpeed: 0.035,
-      soiRadius: 300,
+      soiRadius: 320,
       hasAtmosphere: true,
       atmosphereRadius: 105,
       atmosphereColor: 0x4cc9f0,
@@ -78,10 +78,10 @@ export class SolarSystem {
       radius: 22,
       mass: 4500,
       color: 0xe8d8b8,
-      orbitRadius: 140,
-      orbitSpeed: 0.12,
+      orbitRadius: 240,
+      orbitSpeed: 0.08,
       orbitParentId: 'hearthstone',
-      soiRadius: 55,
+      soiRadius: 45,
       hasAtmosphere: false,
       rotationSpeed: 0.02,
       texture: ProceduralTextures.createMoonTexture()
@@ -130,7 +130,7 @@ export class SolarSystem {
     });
     this.addBody(gigantus);
 
-    // 6. Frostmoon (Icy moon orbiting Gigantus)
+    // 6. Frostmoon (Icy moon orbiting Gigantus outside rings)
     const frostmoon = new CelestialBody({
       id: 'frostmoon',
       name: 'Frostmoon',
@@ -138,10 +138,10 @@ export class SolarSystem {
       radius: 24,
       mass: 6500,
       color: 0xd0f0fd,
-      orbitRadius: 240,
-      orbitSpeed: 0.075,
+      orbitRadius: 380,
+      orbitSpeed: 0.05,
       orbitParentId: 'gigantus',
-      soiRadius: 65,
+      soiRadius: 55,
       hasAtmosphere: false,
       rotationSpeed: 0.03,
       texture: ProceduralTextures.createFrostmoonTexture()
@@ -158,7 +158,7 @@ export class SolarSystem {
       color: 0xa8dadc,
       orbitRadius: 1450,
       orbitSpeed: 0.045,
-      soiRadius: 55,
+      soiRadius: 70,
       hasAtmosphere: true,
       atmosphereRadius: 32,
       atmosphereColor: 0x48cae4

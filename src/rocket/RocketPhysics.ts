@@ -56,6 +56,10 @@ export class RocketPhysics {
   public currentDominant: CelestialBody;
   public landedBody: CelestialBody | null = null;
 
+  // Stable parking orbit tracking
+  public orbitRelPos: THREE.Vector3 = new THREE.Vector3();
+  public orbitOmega: number = 0;
+
   // Callbacks for sound and gameplay events
   public onOrbitAchieved: (() => void) | null = null;
   public onTouchdown: ((body: CelestialBody) => void) | null = null;
@@ -130,6 +134,10 @@ export class RocketPhysics {
   public steerScreenRelative(screenX: number, screenY: number, camera: THREE.Camera, dt: number): void {
     if (this.flightStatus === 'PAD' || this.flightStatus === 'LANDED') return;
 
+    if (this.flightStatus === 'ORBIT') {
+      this.flightStatus = 'FLYING';
+    }
+
     // If autopilot is actively running and player touches steering, yield control back to player
     if (this.autopilotState !== 'IDLE') {
       this.cancelAutopilot();
@@ -182,13 +190,14 @@ export class RocketPhysics {
     // Zero out any residual angular momentum immediately
     this.angularVelocity.set(0, 0, 0);
 
-    // Gentle auto-level: ensure rocket roll aligns nicely with planet horizon
-    const planetUp = this.position.clone().sub(this.currentDominant.position).normalize();
+    // Gentle auto-level: ensure rocket roll aligns nicely with planet horizon or solar ecliptic
+    const desiredUp = this.currentDominant.config.id === 'sun'
+      ? new THREE.Vector3(0, 1, 0)
+      : this.position.clone().sub(this.currentDominant.position).normalize();
     const rocketForward = new THREE.Vector3(0, 1, 0).applyQuaternion(this.quaternion);
 
     // If rocket is not pointing straight up or straight down, level the roll
-    if (Math.abs(rocketForward.dot(planetUp)) < 0.92) {
-      const desiredUp = planetUp;
+    if (Math.abs(rocketForward.dot(desiredUp)) < 0.92) {
       // We keep rocketForward unchanged, only align local Z with horizontal tangent
       const right = new THREE.Vector3().crossVectors(desiredUp, rocketForward).normalize();
       const trueUp = new THREE.Vector3().crossVectors(rocketForward, right).normalize();
@@ -203,12 +212,18 @@ export class RocketPhysics {
     // Prevent manual throttle reset if auto-ascent or autopilot is actively flying
     if (this.isAutoFlying()) return;
     this.throttle = Math.max(0, Math.min(1, t));
+    if (this.throttle > 0.05 && this.flightStatus === 'ORBIT') {
+      this.flightStatus = 'FLYING';
+    }
   }
 
   public setCruise(active: boolean): void {
     this.cruiseLocked = active;
     if (active) {
       this.throttle = 1.0;
+      if (this.flightStatus === 'ORBIT') {
+        this.flightStatus = 'FLYING';
+      }
     }
   }
 
@@ -230,23 +245,26 @@ export class RocketPhysics {
     this.timeWarp = 1.0;
     this.currentDominant = targetBody;
 
-    // Cozy low orbit altitude (~35-65m above surface)
-    const orbitAlt = Math.max(35.0, Math.min(65.0, targetBody.config.radius * 0.7));
+    // Cozy low orbit altitude (~15-50m above surface)
+    const orbitAlt = Math.max(15.0, Math.min(50.0, targetBody.config.radius * 0.6));
     const r = targetBody.config.radius + orbitAlt;
 
     const toShip = this.position.clone().sub(targetBody.position);
+    toShip.y = 0; // maintain planar orbit aligned with solar system
     if (toShip.lengthSq() < 1.0) toShip.set(1, 0, 0);
     toShip.normalize();
 
-    // Tangential orbital velocity vector around the world
+    this.orbitRelPos.copy(toShip).multiplyScalar(r);
+    this.position.copy(targetBody.position).add(this.orbitRelPos);
+
+    // Tangential orbital velocity vector around the world in equatorial plane
     const planetAxis = new THREE.Vector3(0, 1, 0);
     let tangent = new THREE.Vector3().crossVectors(toShip, planetAxis).normalize();
-    if (tangent.lengthSq() < 0.1) tangent.set(1, 0, 0);
+    if (tangent.lengthSq() < 0.1) tangent.set(0, 0, 1);
 
     const vCirc = Math.sqrt((1.0 * targetBody.config.mass) / r);
+    this.orbitOmega = vCirc / r;
 
-    // Place cleanly on circular orbit trajectory
-    this.position.copy(targetBody.position).addScaledVector(toShip, r);
     this.velocity.copy(targetBody.velocity).addScaledVector(tangent, vCirc);
 
     // Orient rocket forward (+Y) along orbital tangent
@@ -347,6 +365,26 @@ export class RocketPhysics {
     const { body: dominant } = this.solarSystem.getDominantBody(this.position);
     this.currentDominant = dominant;
 
+    // Stable Analytical Parking Orbit when coasting in orbit around a celestial body
+    if (this.flightStatus === 'ORBIT' && this.throttle === 0 && this.autoAscentState === 'INACTIVE' && this.autopilotState === 'IDLE' && this.autoLandingState === 'IDLE') {
+      if (this.orbitRelPos.lengthSq() > 1.0 && this.orbitOmega > 0) {
+        const orbitNormal = new THREE.Vector3(0, 1, 0);
+        this.orbitRelPos.applyAxisAngle(orbitNormal, this.orbitOmega * dt);
+        this.position.copy(this.currentDominant.position).add(this.orbitRelPos);
+
+        const toShip = this.orbitRelPos.clone().normalize();
+        const tangent = new THREE.Vector3().crossVectors(toShip, orbitNormal).normalize();
+        const r = this.orbitRelPos.length();
+        const vCirc = Math.sqrt((1.0 * this.currentDominant.config.mass) / r);
+        this.velocity.copy(this.currentDominant.velocity).addScaledVector(tangent, vCirc);
+
+        const targetQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), tangent);
+        this.quaternion.copy(targetQuat);
+        this.angularVelocity.set(0, 0, 0);
+        return;
+      }
+    }
+
     // Vector to dominant planet center
     const toPlanet = dominant.position.clone().sub(this.position);
     const distToCenter = toPlanet.length();
@@ -395,9 +433,20 @@ export class RocketPhysics {
     // Total Acceleration
     const totalAcc = gravForce.clone().add(thrustAcc).add(dragAcc);
 
-    // 8. Integrate Velocity & Position
-    this.velocity.addScaledVector(totalAcc, dt);
-    this.position.addScaledVector(this.velocity, dt);
+    // 8. Integrate Velocity & Position in Dominant Body Reference Frame
+    if (dominant.config.id !== 'sun') {
+      const relVel = this.velocity.clone().sub(dominant.velocity);
+      const relPos = this.position.clone().sub(dominant.position);
+
+      relVel.addScaledVector(totalAcc, dt);
+      relPos.addScaledVector(relVel, dt);
+
+      this.velocity.copy(dominant.velocity).add(relVel);
+      this.position.copy(dominant.position).add(relPos);
+    } else {
+      this.velocity.addScaledVector(totalAcc, dt);
+      this.position.addScaledVector(this.velocity, dt);
+    }
 
     // 9. Manual Highway Flight Assist & Automatic Destination Capture
     if (this.autoAscentState === 'INACTIVE' && this.autopilotState === 'IDLE' && this.autoLandingState === 'IDLE') {
@@ -411,15 +460,16 @@ export class RocketPhysics {
         }
       }
 
-      // Automatic Destination Capture: If manual flight reaches the target planet's arrival vicinity
+      // Automatic Destination Capture: If manual flight reaches the target planet's vicinity or SOI
       if (this.targetBodyId) {
         const targetBody = this.solarSystem.getBody(this.targetBodyId);
-        if (targetBody && targetBody.config.id !== dominant.config.id) {
+        if (targetBody) {
+          const inTargetSOI = dominant.config.id === targetBody.config.id;
           const distToTarget = this.position.distanceTo(targetBody.position);
-          const captureDist = targetBody.config.radius * 2.2;
+          const captureDist = Math.max(85.0, targetBody.config.radius * 2.2);
           const distToArrival = this.currentHighwayInfo ? this.currentHighwayInfo.distToTargetArrival : Infinity;
 
-          if (distToTarget <= captureDist || distToArrival <= 70.0) {
+          if (inTargetSOI || distToTarget <= captureDist || distToArrival <= 85.0) {
             this.performOrbitalCapture(targetBody);
           }
         }
@@ -497,24 +547,31 @@ export class RocketPhysics {
         this.autoAscentState = 'CIRCULARIZING';
       }
     } else if (this.autoAscentState === 'CIRCULARIZING') {
-      // Lock into stable circular parking orbit (~50m above Hearthstone surface)
-      const orbitAlt = 50.0;
+      // Lock into stable circular parking orbit (~40m above Hearthstone surface)
+      const orbitAlt = 40.0;
       const r = dominant.config.radius + orbitAlt;
-      const toShip = this.position.clone().sub(dominant.position).normalize();
-      this.position.copy(dominant.position).addScaledVector(toShip, r);
+      const toShip = this.position.clone().sub(dominant.position);
+      toShip.y = 0; // align with X-Z solar system plane
+      if (toShip.lengthSq() < 1.0) toShip.set(1, 0, 0);
+      toShip.normalize();
+
+      this.orbitRelPos.copy(toShip).multiplyScalar(r);
+      this.position.copy(dominant.position).add(this.orbitRelPos);
 
       const vCirc = Math.sqrt((1.0 * dominant.config.mass) / r); // Circular velocity
+      this.orbitOmega = vCirc / r;
 
-      // Exact orbital tangent perpendicular to toShip
-      const orbitPlaneNormal = new THREE.Vector3(0, 0, 1);
+      // Exact orbital tangent perpendicular to toShip in X-Z plane
+      const orbitPlaneNormal = new THREE.Vector3(0, 1, 0);
       let circTangent = new THREE.Vector3().crossVectors(toShip, orbitPlaneNormal).normalize();
       if (circTangent.lengthSq() < 0.1) {
-        circTangent = new THREE.Vector3(1, 0, 0);
+        circTangent = new THREE.Vector3(0, 0, 1);
       }
 
       this.velocity.copy(dominant.velocity).addScaledVector(circTangent, vCirc);
       const targetQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), circTangent);
       this.quaternion.copy(targetQuat);
+      this.angularVelocity.set(0, 0, 0);
 
       this.autoAscentState = 'INACTIVE';
       this.flightStatus = 'ORBIT';
@@ -527,14 +584,14 @@ export class RocketPhysics {
     }
   }
 
-  // Automated Interplanetary Transfer (Option 3A: Speed-Governed Highway Cruise & Guaranteed Capture)
+  // Automated Interplanetary Transfer (Speed-Governed Cruise & Guaranteed Capture)
   private handleAutopilotTransfer(dt: number, dominant: CelestialBody): void {
     if (!this.targetBodyId) {
       this.cancelAutopilot();
       return;
     }
     const targetBody = this.solarSystem.getBody(this.targetBodyId);
-    if (!targetBody || targetBody.config.id === this.currentDominant.config.id) {
+    if (!targetBody) {
       this.cancelAutopilot();
       return;
     }
@@ -542,38 +599,43 @@ export class RocketPhysics {
     const distToTarget = this.position.distanceTo(targetBody.position);
     const targetArrivalPos = this.currentHighwayInfo ? this.currentHighwayInfo.targetArrival : targetBody.position;
     const distToArrival = this.position.distanceTo(targetArrivalPos);
-    const captureRadius = targetBody.config.radius * 2.2;
+    const captureRadius = Math.max(85.0, targetBody.config.radius * 2.2);
 
-    // Check if within capture distance of target world (guaranteed arrival!)
-    if (distToTarget <= captureRadius || distToArrival <= 75.0) {
+    // Guaranteed Orbital Capture when reaching target world vicinity or SOI
+    const inTargetSOI = this.currentDominant.config.id === targetBody.config.id;
+    if (inTargetSOI || distToTarget <= captureRadius || distToArrival <= 85.0) {
       this.performOrbitalCapture(targetBody);
       return;
     }
 
-    // Determine heading direction: along golden highway forward or toward target arrival point
+    // Lead Intercept Targeting: Point ahead of target world along its orbit
+    const leadTime = Math.min(30.0, distToTarget / 70.0);
+    const interceptPos = targetBody.position.clone().addScaledVector(targetBody.velocity, leadTime);
+    const targetLeadDir = interceptPos.clone().sub(this.position).normalize();
+
+    // Determine heading direction: along golden highway forward or toward lead intercept
     let headingDir = this.currentHighwayInfo?.highwayForward;
-    if (!headingDir || headingDir.lengthSq() < 0.1) {
-      headingDir = targetArrivalPos.clone().sub(this.position).normalize();
+    if (!headingDir || headingDir.lengthSq() < 0.1 || !this.isOnHighway) {
+      headingDir = targetLeadDir;
     }
 
-    // Relative speed in planetary system
-    const relVel = this.velocity.clone().sub(this.currentDominant.velocity);
-    const currentSpeed = relVel.length();
+    // Velocity relative to target body
+    const relVelToTarget = this.velocity.clone().sub(targetBody.velocity);
+    const currentSpeed = relVelToTarget.length();
 
     // 2-Phase Speed Regulation:
-    if (distToTarget > 350.0) {
+    if (distToTarget > 280.0) {
       // 1. Interplanetary Cruise Phase
-      // Point towards highway/target
       const targetQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), headingDir);
       this.quaternion.slerp(targetQuat, Math.min(1.0, 5.0 * dt));
 
-      const cruiseSpeed = 65.0; // safe governed speed (m/s)
+      const cruiseSpeed = 70.0; // safe governed speed relative to target (m/s)
       if (currentSpeed < cruiseSpeed - 5.0) {
         this.throttle = 1.0;
       } else if (currentSpeed > cruiseSpeed + 5.0) {
         this.throttle = 0.0;
       } else {
-        this.throttle = 0.15; // sustain speed
+        this.throttle = 0.2; // sustain speed
       }
 
       // Smooth time warp during long-distance cruise
@@ -585,19 +647,19 @@ export class RocketPhysics {
       // Drop time warp immediately to 1.0!
       this.timeWarp = 1.0;
 
-      // Target smooth approach speed ~ 22-26 m/s
+      // Target smooth approach speed ~ 22-26 m/s relative to target
       const approachSpeed = 24.0;
       if (currentSpeed > approachSpeed + 3.0) {
-        // Turn retrograde to brake and shed excessive speed
-        const retroDir = relVel.clone().normalize().negate();
+        // Turn retrograde relative to target to brake and shed excess speed
+        const retroDir = relVelToTarget.clone().normalize().negate();
         const retroQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), retroDir);
         this.quaternion.slerp(retroQuat, Math.min(1.0, 6.0 * dt));
         this.throttle = 0.85;
       } else {
-        // Align smoothly with arrival tangent
+        // Align smoothly with arrival heading
         const targetQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), headingDir);
         this.quaternion.slerp(targetQuat, Math.min(1.0, 5.0 * dt));
-        this.throttle = 0.1;
+        this.throttle = 0.15;
       }
     }
   }
@@ -670,10 +732,10 @@ export class RocketPhysics {
 
     // Orbit detection (strictly close to a planet/moon, excluding the Sun)
     const isSun = this.currentDominant.config.id === 'sun';
-    const minOrbitAlt = 25.0;
-    const maxOrbitAlt = Math.max(90.0, this.currentDominant.config.radius * 1.6);
+    const minOrbitAlt = 10.0;
+    const maxOrbitAlt = Math.max(70.0, this.currentDominant.config.radius * 1.6);
     const inOrbitAltitude = altitude >= minOrbitAlt && altitude <= maxOrbitAlt;
-    const isOrbitDynamics = speed >= 12.0 && speed <= 42.0 && Math.abs(verticalSpeed) < 8.0;
+    const isOrbitDynamics = speed >= 10.0 && speed <= 45.0 && Math.abs(verticalSpeed) < 8.0;
 
     const isOrbit = !isSun && (this.flightStatus === 'ORBIT' || (inOrbitAltitude && isOrbitDynamics));
 

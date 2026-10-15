@@ -138,26 +138,41 @@ export class TrajectoryRenderer {
 
     // Start point: current ship position
     const start = currentPos.clone();
+
+    // 1. Moving Target Lead Intercept Calculation:
+    // Lead target planet based on estimated flight arrival time
+    const distToTarget = currentPos.distanceTo(targetBody.position);
+    const leadTime = Math.min(30.0, distToTarget / 70.0);
+    const targetLeadPos = targetBody.position.clone().addScaledVector(targetBody.velocity, leadTime);
+
     // End point: target planet position + orbital tangent arrival point
-    const toShip = start.clone().sub(targetBody.position);
+    const toShip = start.clone().sub(targetLeadPos);
+    toShip.y = 0; // planar solar system orbit
+    if (toShip.lengthSq() < 1.0) toShip.set(1, 0, 0);
+    toShip.normalize();
+
     const arrivalTangent = new THREE.Vector3().crossVectors(toShip, new THREE.Vector3(0, 1, 0)).normalize();
     if (arrivalTangent.lengthSq() < 0.1) arrivalTangent.set(1, 0, 0);
 
-    const targetArrival = targetBody.position.clone().addScaledVector(arrivalTangent, targetBody.config.radius + 45);
+    const targetArrival = targetLeadPos.clone().addScaledVector(toShip, targetBody.config.radius + 45.0);
 
     // Natural curved arc bowing outward in space
     const mid = start.clone().add(targetArrival).multiplyScalar(0.5);
     const sunPos = new THREE.Vector3(0, 0, 0);
-    const bowDir = mid.clone().sub(sunPos).normalize();
-    const arcHeight = Math.min(250, start.distanceTo(targetArrival) * 0.25);
+    let bowDir = mid.clone().sub(sunPos);
+    bowDir.y = 0;
+    if (bowDir.lengthSq() < 1.0) bowDir.set(0, 0, 1);
+    bowDir.normalize();
+
+    const arcHeight = Math.min(220, start.distanceTo(targetArrival) * 0.22);
     const controlPoint = mid.addScaledVector(bowDir, arcHeight);
 
     let minDist = Infinity;
+    let closestT = 0;
 
-    // Cubic Bezier curve points
+    // Quadratic Bezier curve points
     for (let i = 0; i < this.highwayPointCount; i++) {
       const t = i / (this.highwayPointCount - 1);
-      // Quadratic Bezier interpolation
       const pt = new THREE.Vector3()
         .addScaledVector(start, (1 - t) * (1 - t))
         .addScaledVector(controlPoint, 2 * (1 - t) * t)
@@ -170,6 +185,7 @@ export class TrajectoryRenderer {
       const d = currentPos.distanceTo(pt);
       if (d < minDist) {
         minDist = d;
+        closestT = t;
       }
     }
     this.highwayGeom.attributes.position.needsUpdate = true;
@@ -188,15 +204,21 @@ export class TrajectoryRenderer {
     }
     this.beaconGeom.attributes.position.needsUpdate = true;
 
-    // Direction along highway from start toward controlPoint/targetArrival
-    let highwayForward = controlPoint.clone().sub(start).normalize();
-    if (highwayForward.lengthSq() < 0.1 || start.distanceTo(controlPoint) < 5.0) {
-      highwayForward = targetArrival.clone().sub(start).normalize();
+    // Exact forward tangent derivative along Quadratic Bezier: B'(t) = 2(1-t)(P1-P0) + 2t(P2-P1)
+    const p1MinusP0 = controlPoint.clone().sub(start);
+    const p2MinusP1 = targetArrival.clone().sub(controlPoint);
+    let highwayForward = new THREE.Vector3()
+      .addScaledVector(p1MinusP0, 2 * (1 - closestT))
+      .addScaledVector(p2MinusP1, 2 * closestT)
+      .normalize();
+
+    if (highwayForward.lengthSq() < 0.1 || closestT > 0.92) {
+      highwayForward = arrivalTangent.clone();
     }
 
     const distToTargetArrival = currentPos.distanceTo(targetArrival);
     const distToTargetBody = currentPos.distanceTo(targetBody.position);
-    const isOnHighway = minDist < 55.0;
+    const isOnHighway = minDist < 60.0;
 
     return {
       isOnHighway,
@@ -215,9 +237,12 @@ export class TrajectoryRenderer {
     currentVel: THREE.Vector3,
     targetBodyId: string | null
   ): TrajectoryInfo {
-    const simPos = currentPos.clone();
-    const simVel = currentVel.clone();
-    const { body: dominant } = this.solarSystem.getDominantBody(simPos);
+    const { body: dominant } = this.solarSystem.getDominantBody(currentPos);
+    const isInterplanetary = dominant.config.id === 'sun';
+
+    // Integrate in dominant body reference frame when in planet/moon orbit
+    const simPosRel = isInterplanetary ? currentPos.clone() : currentPos.clone().sub(dominant.position);
+    const simVelRel = isInterplanetary ? currentVel.clone() : currentVel.clone().sub(dominant.velocity);
 
     let maxDist = -Infinity;
     let minDist = Infinity;
@@ -228,18 +253,18 @@ export class TrajectoryRenderer {
     let encounterDist = Infinity;
     const targetBody = targetBodyId ? this.solarSystem.getBody(targetBodyId) : null;
 
-    const dt = 1.2;
+    const dt = 1.0;
     let hitPlanet = false;
     let validPointsCount = this.maxPoints;
 
     for (let i = 0; i < this.maxPoints; i++) {
-      this.positions[i * 3] = simPos.x;
-      this.positions[i * 3 + 1] = simPos.y;
-      this.positions[i * 3 + 2] = simPos.z;
+      // Map to world coordinates for visual ribbon rendering
+      const worldPos = isInterplanetary ? simPosRel : dominant.position.clone().add(simPosRel);
+      this.positions[i * 3] = worldPos.x;
+      this.positions[i * 3 + 1] = worldPos.y;
+      this.positions[i * 3 + 2] = worldPos.z;
 
-      // Gravitational acceleration from dominant body
-      const toBody = dominant.position.clone().sub(simPos);
-      const dist = toBody.length();
+      const dist = simPosRel.length();
 
       // Check collision with surface
       if (dist <= dominant.config.radius) {
@@ -248,23 +273,21 @@ export class TrajectoryRenderer {
         break;
       }
 
-      // Altitude relative to surface
-      const alt = dist - dominant.config.radius;
       if (dist > maxDist) {
         maxDist = dist;
-        apPos.copy(simPos);
+        apPos.copy(worldPos);
       }
       if (dist < minDist) {
         minDist = dist;
-        pePos.copy(simPos);
+        pePos.copy(worldPos);
       }
 
       // Check intercept with target planet if specified
       if (targetBody && targetBody.config.id !== dominant.config.id) {
-        const toTarget = simPos.distanceTo(targetBody.position);
+        const toTarget = worldPos.distanceTo(targetBody.position);
         if (toTarget < encounterDist) {
           encounterDist = toTarget;
-          if (toTarget < targetBody.config.radius * 3.5) {
+          if (toTarget < Math.max(90.0, targetBody.config.radius * 2.5)) {
             encounterBody = targetBody;
           }
         }
@@ -272,12 +295,12 @@ export class TrajectoryRenderer {
 
       // Gravity force F = G * M / r^2
       const G = 1.0;
-      const gravMag = (G * dominant.config.mass) / (dist * dist);
-      const gravAcc = toBody.normalize().multiplyScalar(gravMag);
+      const gravMag = (G * dominant.config.mass) / Math.max(dominant.config.radius * dominant.config.radius * 0.5, dist * dist);
+      const gravAcc = simPosRel.clone().negate().normalize().multiplyScalar(gravMag);
 
       // Integrate velocity and position
-      simVel.addScaledVector(gravAcc, dt);
-      simPos.addScaledVector(simVel, dt);
+      simVelRel.addScaledVector(gravAcc, dt);
+      simPosRel.addScaledVector(simVelRel, dt);
     }
 
     this.lineGeom.setDrawRange(0, validPointsCount);
