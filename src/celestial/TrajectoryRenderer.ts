@@ -12,6 +12,16 @@ export interface TrajectoryInfo {
   encounterDist: number;
 }
 
+export interface HighwayInfo {
+  isOnHighway: boolean;
+  distToHighway: number;
+  highwayForward: THREE.Vector3;
+  targetArrival: THREE.Vector3;
+  distToTargetArrival: number;
+  distToTargetBody: number;
+  targetBody: CelestialBody;
+}
+
 export class TrajectoryRenderer {
   private scene: THREE.Scene;
   private solarSystem: SolarSystem;
@@ -108,18 +118,18 @@ export class TrajectoryRenderer {
   public highwayEnabled: boolean = true;
 
   // Update golden Flight Highway connecting current position to target planet
-  public updateHighway(currentPos: THREE.Vector3, targetBodyId: string | null, dt: number): { isOnHighway: boolean; distToHighway: number } {
+  public updateHighway(currentPos: THREE.Vector3, targetBodyId: string | null, dt: number): HighwayInfo | null {
     if (!targetBodyId || !this.highwayEnabled) {
       this.highwayLine.visible = false;
       this.highwayBeacons.visible = false;
-      return { isOnHighway: false, distToHighway: Infinity };
+      return null;
     }
 
     const targetBody = this.solarSystem.getBody(targetBodyId);
     if (!targetBody) {
       this.highwayLine.visible = false;
       this.highwayBeacons.visible = false;
-      return { isOnHighway: false, distToHighway: Infinity };
+      return null;
     }
 
     this.highwayLine.visible = true;
@@ -133,7 +143,7 @@ export class TrajectoryRenderer {
     const arrivalTangent = new THREE.Vector3().crossVectors(toShip, new THREE.Vector3(0, 1, 0)).normalize();
     if (arrivalTangent.lengthSq() < 0.1) arrivalTangent.set(1, 0, 0);
 
-    const targetArrival = targetBody.position.clone().addScaledVector(arrivalTangent, targetBody.config.radius + 40);
+    const targetArrival = targetBody.position.clone().addScaledVector(arrivalTangent, targetBody.config.radius + 45);
 
     // Natural curved arc bowing outward in space
     const mid = start.clone().add(targetArrival).multiplyScalar(0.5);
@@ -178,8 +188,25 @@ export class TrajectoryRenderer {
     }
     this.beaconGeom.attributes.position.needsUpdate = true;
 
-    const isOnHighway = minDist < 45.0;
-    return { isOnHighway, distToHighway: minDist };
+    // Direction along highway from start toward controlPoint/targetArrival
+    let highwayForward = controlPoint.clone().sub(start).normalize();
+    if (highwayForward.lengthSq() < 0.1 || start.distanceTo(controlPoint) < 5.0) {
+      highwayForward = targetArrival.clone().sub(start).normalize();
+    }
+
+    const distToTargetArrival = currentPos.distanceTo(targetArrival);
+    const distToTargetBody = currentPos.distanceTo(targetBody.position);
+    const isOnHighway = minDist < 55.0;
+
+    return {
+      isOnHighway,
+      distToHighway: minDist,
+      highwayForward,
+      targetArrival,
+      distToTargetArrival,
+      distToTargetBody,
+      targetBody
+    };
   }
 
   // Predict future flight path using numerical forward integration

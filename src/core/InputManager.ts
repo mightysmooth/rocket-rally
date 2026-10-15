@@ -1,10 +1,11 @@
-// InputManager.ts - Keyboard, Touch D-Pad, and Camera-Relative Steering
 import * as THREE from 'three';
 import { RocketPhysics } from '../rocket/RocketPhysics';
+import { CameraManager } from './CameraManager';
 
 export class InputManager {
   private physics: RocketPhysics;
   private camera: THREE.Camera;
+  private cameraManager: CameraManager | null = null;
 
   // Steering states
   public pitchUp: boolean = false;
@@ -17,15 +18,20 @@ export class InputManager {
   public onStageTrigger: (() => void) | null = null;
   public onTimeWarpChange: ((warp: number) => void) | null = null;
 
-  constructor(physics: RocketPhysics, camera: THREE.Camera) {
+  constructor(physics: RocketPhysics, camera: THREE.Camera, cameraManager?: CameraManager) {
     this.physics = physics;
     this.camera = camera;
+    this.cameraManager = cameraManager || null;
     this.setupKeyboardListeners();
     this.setupTouchControls();
   }
 
   public setCamera(camera: THREE.Camera): void {
     this.camera = camera;
+  }
+
+  public setCameraManager(cameraManager: CameraManager): void {
+    this.cameraManager = cameraManager;
   }
 
   private setupKeyboardListeners(): void {
@@ -165,6 +171,7 @@ export class InputManager {
     if (this.pitchUp) screenY -= 1.0;   // Downwards on screen
 
     if (screenX !== 0 || screenY !== 0) {
+      if (this.cameraManager) this.cameraManager.resetChaseAngle();
       this.physics.steerScreenRelative(screenX, screenY, this.camera, dt);
     } else {
       this.physics.stabilizeSAS(dt);
@@ -173,8 +180,10 @@ export class InputManager {
     // Update throttle (respects automated flight if auto-ascent or autopilot is active)
     if (!this.physics.isAutoFlying()) {
       if (this.physics.cruiseLocked) {
+        if (this.cameraManager) this.cameraManager.resetChaseAngle();
         this.physics.setThrottle(1.0);
       } else if (this.thrustActive) {
+        if (this.cameraManager) this.cameraManager.resetChaseAngle();
         this.physics.setThrottle(1.0);
       } else {
         this.physics.setThrottle(0.0);

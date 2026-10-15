@@ -21,10 +21,15 @@ export class CameraManager {
   private lastPointerX: number = 0;
   private lastPointerY: number = 0;
   private touchDistance: number = 0;
+  private userInteractedTimer: number = 0;
 
   constructor(camera: THREE.PerspectiveCamera) {
     this.camera = camera;
     this.setupTouchAndPointerListeners();
+  }
+
+  public resetChaseAngle(): void {
+    this.userInteractedTimer = 0;
   }
 
   public setMode(mode: CameraMode): void {
@@ -123,18 +128,50 @@ export class CameraManager {
       this.targetPosition.set(x, y, z);
 
     } else if (this.mode === 'ROCKET') {
-      // Follow rocket closely in flight
-      this.targetLookAt.copy(rocketPos);
+      if (physics.flightStatus === 'PAD') {
+        // Orbit around rocket upright on launch pad
+        this.targetLookAt.copy(rocketPos);
+        const camOffset = new THREE.Vector3(
+          this.orbitRadius * Math.sin(this.orbitPhi) * Math.sin(this.orbitTheta),
+          this.orbitRadius * Math.cos(this.orbitPhi),
+          this.orbitRadius * Math.sin(this.orbitPhi) * Math.cos(this.orbitTheta)
+        );
+        this.targetPosition.copy(rocketPos).add(camOffset);
+      } else {
+        // Smart Chase Camera during flight & orbit!
+        const forward = new THREE.Vector3(0, 1, 0).applyQuaternion(rocketQuat);
+        const planetUp = physics.position.clone().sub(physics.currentDominant.position).normalize();
 
-      // Rocket direction
-      const forward = new THREE.Vector3(0, 1, 0).applyQuaternion(rocketQuat);
-      const camOffset = new THREE.Vector3(
-        this.orbitRadius * Math.sin(this.orbitPhi) * Math.sin(this.orbitTheta),
-        this.orbitRadius * Math.cos(this.orbitPhi),
-        this.orbitRadius * Math.sin(this.orbitPhi) * Math.cos(this.orbitTheta)
-      );
+        if (this.isPointerDown) {
+          this.userInteractedTimer = 2.0; // retain manual inspection angle for 2s after release
+        } else if (this.userInteractedTimer > 0) {
+          this.userInteractedTimer -= dt;
+        }
 
-      this.targetPosition.copy(rocketPos).add(camOffset);
+        if (this.userInteractedTimer > 0) {
+          // Manual camera inspection
+          this.targetLookAt.copy(rocketPos);
+          const camOffset = new THREE.Vector3(
+            this.orbitRadius * Math.sin(this.orbitPhi) * Math.sin(this.orbitTheta),
+            this.orbitRadius * Math.cos(this.orbitPhi),
+            this.orbitRadius * Math.sin(this.orbitPhi) * Math.cos(this.orbitTheta)
+          );
+          this.targetPosition.copy(rocketPos).add(camOffset);
+        } else {
+          // Automatic Chase Cam: Sits smoothly behind rocket tail, elevated slightly, looking ahead!
+          const chaseDist = Math.max(20, Math.min(65, this.orbitRadius));
+          const chaseElev = chaseDist * 0.35;
+
+          const idealCamPos = rocketPos.clone()
+            .addScaledVector(forward, -chaseDist)
+            .addScaledVector(planetUp, chaseElev);
+
+          const idealLookAt = rocketPos.clone().addScaledVector(forward, chaseDist * 0.6);
+
+          this.targetPosition.copy(idealCamPos);
+          this.targetLookAt.copy(idealLookAt);
+        }
+      }
 
     } else if (this.mode === 'COCKPIT') {
       // Inside astronaut capsule bubble!

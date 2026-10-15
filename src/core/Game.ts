@@ -78,7 +78,7 @@ export class Game {
     this.rocketPhysics = new RocketPhysics(this.rocketAssembly, this.solarSystem, this.particleEffects);
     this.trajectoryRenderer = new TrajectoryRenderer(this.scene, this.solarSystem);
     this.cameraManager = new CameraManager(this.camera);
-    this.inputManager = new InputManager(this.rocketPhysics, this.camera);
+    this.inputManager = new InputManager(this.rocketPhysics, this.camera, this.cameraManager);
 
     // 5. UI Layers
     this.builderUI = new BuilderUI(this.rocketAssembly, this.soundSynth);
@@ -351,8 +351,8 @@ export class Game {
         this.rocketPhysics.targetBodyId,
         dt
       );
-      this.rocketPhysics.isOnHighway = highwayInfo.isOnHighway;
-      if (highwayInfo.isOnHighway && this.rocketPhysics.throttle > 0.05) {
+      this.rocketPhysics.setHighwayInfo(highwayInfo);
+      if (highwayInfo && highwayInfo.isOnHighway && this.rocketPhysics.throttle > 0.05) {
         this.particleEffects.emitHighwaySparkles(this.rocketPhysics.position);
       }
 
