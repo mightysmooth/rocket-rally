@@ -5,6 +5,7 @@ import { SolarSystem } from '../celestial/SolarSystem';
 import { CelestialBody } from '../celestial/CelestialBody';
 import { SoundSynth } from '../audio/SoundSynth';
 import { ParticleEffects } from '../rocket/ParticleEffects';
+import { TrajectoryRenderer } from '../celestial/TrajectoryRenderer';
 
 export class FlightHUD {
   private physics: RocketPhysics;
@@ -12,6 +13,7 @@ export class FlightHUD {
   private solarSystem: SolarSystem;
   private soundSynth: SoundSynth;
   private particleEffects: ParticleEffects;
+  private trajectoryRenderer: TrajectoryRenderer | null = null;
 
   // UI Elements
   private elSpeed: HTMLElement | null = null;
@@ -23,6 +25,10 @@ export class FlightHUD {
   private elOrbitBanner: HTMLElement | null = null;
   private elLandingOverlay: HTMLElement | null = null;
   private elCruiseBtn: HTMLElement | null = null;
+  private elAutopilotFlyBtn: HTMLElement | null = null;
+  private elToggleHighwayBtn: HTMLElement | null = null;
+  private elAutoLandBtn: HTMLElement | null = null;
+  private elRetrogradeBtn: HTMLElement | null = null;
 
   // Callbacks
   public onReturnToBuilder: (() => void) | null = null;
@@ -34,13 +40,15 @@ export class FlightHUD {
     cameraManager: CameraManager,
     solarSystem: SolarSystem,
     soundSynth: SoundSynth,
-    particleEffects: ParticleEffects
+    particleEffects: ParticleEffects,
+    trajectoryRenderer?: TrajectoryRenderer
   ) {
     this.physics = physics;
     this.cameraManager = cameraManager;
     this.solarSystem = solarSystem;
     this.soundSynth = soundSynth;
     this.particleEffects = particleEffects;
+    this.trajectoryRenderer = trajectoryRenderer || null;
 
     this.cacheElements();
     this.setupCameraButtons();
@@ -62,6 +70,10 @@ export class FlightHUD {
     this.elOrbitBanner = document.getElementById('orbit-banner');
     this.elLandingOverlay = document.getElementById('landing-overlay');
     this.elCruiseBtn = document.getElementById('btn-cruise');
+    this.elAutopilotFlyBtn = document.getElementById('btn-autopilot-fly');
+    this.elToggleHighwayBtn = document.getElementById('btn-toggle-highway');
+    this.elAutoLandBtn = document.getElementById('btn-auto-land');
+    this.elRetrogradeBtn = document.getElementById('btn-aim-retrograde');
   }
 
   private setupCameraButtons(): void {
@@ -83,25 +95,64 @@ export class FlightHUD {
   }
 
   private setupGuidanceButtons(): void {
-    const bindAim = (id: string, mode: GuidanceMode) => {
-      const btn = document.getElementById(id);
-      if (!btn) return;
-      btn.addEventListener('click', () => {
-        const isActive = btn.classList.contains('active');
-        document.querySelectorAll('.guidance-bar .btn-aim').forEach(b => b.classList.remove('active'));
-        if (isActive) {
-          this.physics.setGuidanceMode('OFF');
+    // Autopilot Transfer button (Can be clicked at ANY time!)
+    if (this.elAutopilotFlyBtn) {
+      this.elAutopilotFlyBtn.addEventListener('click', () => {
+        if (this.physics.autopilotState !== 'IDLE') {
+          this.physics.cancelAutopilot();
+          this.soundSynth.playClick();
         } else {
-          btn.classList.add('active');
-          this.physics.setGuidanceMode(mode);
+          this.physics.startAutopilotTransfer();
+          this.soundSynth.playCountdownBeep(true);
+        }
+      });
+    }
+
+    // Toggle Flight Highway Ribbon
+    if (this.elToggleHighwayBtn) {
+      this.elToggleHighwayBtn.addEventListener('click', () => {
+        if (this.trajectoryRenderer) {
+          const active = this.trajectoryRenderer.toggleHighway();
+          if (active) {
+            this.elToggleHighwayBtn!.classList.add('active');
+          } else {
+            this.elToggleHighwayBtn!.classList.remove('active');
+          }
         }
         this.soundSynth.playClick();
       });
-    };
+    }
 
-    bindAim('btn-aim-prograde', 'PROGRADE');
-    bindAim('btn-aim-retrograde', 'RETROGRADE');
-    bindAim('btn-aim-target', 'TARGET');
+    // Auto-Landing button
+    if (this.elAutoLandBtn) {
+      this.elAutoLandBtn.addEventListener('click', () => {
+        if (this.physics.autoLandingState !== 'IDLE') {
+          this.physics.cancelAutoLanding();
+          this.soundSynth.playClick();
+        } else {
+          this.physics.startAutoLanding();
+          this.soundSynth.playCountdownBeep(true);
+        }
+      });
+    }
+
+    // Retrograde / Manual Brake button
+    if (this.elRetrogradeBtn) {
+      this.elRetrogradeBtn.addEventListener('click', () => {
+        const isActive = this.elRetrogradeBtn!.classList.contains('active');
+        if (isActive) {
+          this.physics.setGuidanceMode('OFF');
+          this.elRetrogradeBtn!.classList.remove('active');
+        } else {
+          this.physics.setGuidanceMode('RETROGRADE');
+          this.elRetrogradeBtn!.classList.add('active');
+          if (this.physics.flightStatus === 'FLYING') {
+            this.physics.throttle = Math.max(this.physics.throttle, 0.7);
+          }
+        }
+        this.soundSynth.playClick();
+      });
+    }
   }
 
   private setupTargetChips(): void {
@@ -133,6 +184,12 @@ export class FlightHUD {
           chip.classList.add('active');
           this.physics.setTargetBody(t.id);
           if (this.elTargetName) this.elTargetName.textContent = t.name;
+          if (this.trajectoryRenderer) {
+            this.trajectoryRenderer.setHighwayVisible(true);
+            if (this.elToggleHighwayBtn) {
+              this.elToggleHighwayBtn.classList.add('active');
+            }
+          }
         }
         this.soundSynth.playClick();
       });
@@ -296,6 +353,10 @@ export class FlightHUD {
   // Show Orbit Achieved celebratory banner
   public showOrbitBanner(): void {
     if (!this.elOrbitBanner) return;
+    const title = document.getElementById('banner-title');
+    const sub = document.getElementById('banner-sub');
+    if (title) title.textContent = 'ORBIT ACHIEVED! 🛰️';
+    if (sub) sub.textContent = 'You are coasting peacefully in space around the planet!';
     this.soundSynth.playOrbitAchievedFanfare();
     this.particleEffects.emitCelebration(this.physics.position);
     this.elOrbitBanner.classList.remove('hidden');
@@ -305,6 +366,24 @@ export class FlightHUD {
         this.elOrbitBanner.classList.add('hidden');
       }
     }, 5500);
+  }
+
+  // Show Arrival in target orbit banner
+  public showArrivalBanner(body: CelestialBody): void {
+    if (!this.elOrbitBanner) return;
+    const title = document.getElementById('banner-title');
+    const sub = document.getElementById('banner-sub');
+    if (title) title.textContent = `ARRIVED AT ${body.config.name.toUpperCase()}! ${body.config.emoji}`;
+    if (sub) sub.textContent = `You've entered orbit around ${body.config.name}! Tap Auto-Land to explore, or snap a photo!`;
+    this.soundSynth.playOrbitAchievedFanfare();
+    this.particleEffects.emitCelebration(this.physics.position);
+    this.elOrbitBanner.classList.remove('hidden');
+
+    setTimeout(() => {
+      if (this.elOrbitBanner) {
+        this.elOrbitBanner.classList.add('hidden');
+      }
+    }, 6000);
   }
 
   // Show Landing dialogue
@@ -345,13 +424,77 @@ export class FlightHUD {
       if (telemetry.status === 'PAD') {
         this.elOrbitStatus.textContent = 'On Launchpad';
       } else if (telemetry.status === 'LANDED') {
-        this.elOrbitStatus.textContent = `Landed on ${telemetry.dominantBodyName}`;
+        this.elOrbitStatus.textContent = `Landed on ${telemetry.dominantBodyName} 🚩`;
+      } else if (telemetry.autoAscentState === 'VERTICAL') {
+        this.elOrbitStatus.textContent = '🚀 Taking Off to Orbit...';
+      } else if (telemetry.autoAscentState === 'GRAVITY_TURN') {
+        this.elOrbitStatus.textContent = '🔄 Pitching to Orbit...';
+      } else if (telemetry.autoAscentState === 'CIRCULARIZING') {
+        this.elOrbitStatus.textContent = '🛰️ Circularizing Orbit...';
+      } else if (telemetry.autopilotState === 'ALIGNING') {
+        this.elOrbitStatus.textContent = '🧭 Aligning with Highway...';
+      } else if (telemetry.autopilotState === 'TRANSFERRING') {
+        this.elOrbitStatus.textContent = '✨ Hyperspace Cruise...';
+      } else if (telemetry.autopilotState === 'CAPTURING') {
+        this.elOrbitStatus.textContent = '🎯 Entering Target Orbit...';
+      } else if (telemetry.autoLandingState === 'DEORBITING') {
+        this.elOrbitStatus.textContent = '🛑 Braking for Landing...';
+      } else if (telemetry.autoLandingState === 'DESCENDING') {
+        this.elOrbitStatus.textContent = '🪂 Soft Landing Descent...';
+      } else if (telemetry.isOnHighway) {
+        this.elOrbitStatus.textContent = '✨ On Flight Highway! 🚀';
       } else if (telemetry.isOrbit) {
         this.elOrbitStatus.textContent = `Orbiting ${telemetry.dominantBodyName} ✨`;
       } else if (telemetry.altitude < 40) {
         this.elOrbitStatus.textContent = 'Atmosphere Ascent';
       } else {
         this.elOrbitStatus.textContent = 'Deep Space Flight';
+      }
+    }
+
+    // Autopilot Fly button visibility & label
+    if (this.elAutopilotFlyBtn) {
+      const hasTarget = !!this.physics.targetBodyId;
+      const targetBody = hasTarget ? this.solarSystem.getBody(this.physics.targetBodyId!) : null;
+      const isTargetOther = targetBody && targetBody.config.id !== this.physics.currentDominant.config.id;
+
+      if (isTargetOther && (telemetry.status === 'FLYING' || telemetry.status === 'ORBIT')) {
+        this.elAutopilotFlyBtn.classList.remove('hidden');
+        if (telemetry.autopilotState !== 'IDLE') {
+          this.elAutopilotFlyBtn.innerHTML = '🛑 Cancel Autopilot';
+          this.elAutopilotFlyBtn.classList.add('active');
+        } else {
+          this.elAutopilotFlyBtn.innerHTML = `🚀 Fly to ${targetBody.config.name}`;
+          this.elAutopilotFlyBtn.classList.remove('active');
+        }
+      } else {
+        this.elAutopilotFlyBtn.classList.add('hidden');
+      }
+    }
+
+    // Highway toggle button visibility
+    if (this.elToggleHighwayBtn) {
+      if (this.physics.targetBodyId && (telemetry.status === 'FLYING' || telemetry.status === 'ORBIT')) {
+        this.elToggleHighwayBtn.classList.remove('hidden');
+      } else {
+        this.elToggleHighwayBtn.classList.add('hidden');
+      }
+    }
+
+    // Auto-Land button visibility & label
+    if (this.elAutoLandBtn) {
+      const canLand = (telemetry.isOrbit || telemetry.autoLandingState !== 'IDLE') && (telemetry.status === 'FLYING' || telemetry.status === 'ORBIT');
+      if (canLand) {
+        this.elAutoLandBtn.classList.remove('hidden');
+        if (telemetry.autoLandingState !== 'IDLE') {
+          this.elAutoLandBtn.innerHTML = '🛑 Cancel Landing';
+          this.elAutoLandBtn.classList.add('active');
+        } else {
+          this.elAutoLandBtn.innerHTML = '🪂 Auto-Land';
+          this.elAutoLandBtn.classList.remove('active');
+        }
+      } else {
+        this.elAutoLandBtn.classList.add('hidden');
       }
     }
 

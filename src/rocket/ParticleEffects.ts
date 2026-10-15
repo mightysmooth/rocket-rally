@@ -184,6 +184,28 @@ export class ParticleEffects {
     }
   }
 
+  // Golden trail sparkles when flying along the guidance highway
+  public emitHighwaySparkles(pos: THREE.Vector3): void {
+    for (let i = 0; i < 3; i++) {
+      if (this.confettiParticles.length >= this.maxConfetti) {
+        this.confettiParticles.shift();
+      }
+      const vel = new THREE.Vector3(
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * 6
+      );
+      this.confettiParticles.push({
+        pos: pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 3)),
+        vel: vel,
+        color: new THREE.Color(0xffd166),
+        size: 14,
+        life: 0,
+        maxLife: 0.6 + Math.random() * 0.4
+      });
+    }
+  }
+
   public update(dt: number): void {
     // 1. Update Flames & Smoke
     for (let i = this.flameParticles.length - 1; i >= 0; i--) {

@@ -134,20 +134,32 @@
           <button id="btn-cam-planet" class="btn-cam" title="Focus Planet">🪐 Planet</button>
         </div>
 
-        <!-- Smart Guidance Assist (Kid-Friendly autopilot!) -->
-        <div class="guidance-bar">
-          <span class="guidance-title">Auto-Aim:</span>
-          <button id="btn-aim-prograde" class="btn-aim" title="Point forward along your orbit to speed up">⏩ Faster (Orbit)</button>
-          <button id="btn-aim-retrograde" class="btn-aim" title="Point backward to slow down">⏪ Slow Down</button>
-          <button id="btn-aim-target" class="btn-aim" title="Point nose right at chosen destination planet">🎯 Aim Target</button>
-        </div>
-
-        <!-- Target Destination Selector -->
+        <!-- Destination Selection Bar (Choose a Planet) -->
         <div class="target-selector-bar">
-          <span class="target-title">Fly To:</span>
+          <span class="target-title">🪐 Choose Planet:</span>
           <div class="target-chips" id="target-chips">
             <!-- Dynamically populated buttons for Hearthstone, Mun, Red Mesa, Gigantus, Frostmoon, Comet -->
           </div>
+        </div>
+
+        <!-- Kid-Friendly Flight Highway & Actions Bar -->
+        <div class="guidance-bar" id="guidance-bar">
+          <!-- Autopilot Transfer button (Can be clicked at ANY time!) -->
+          <button id="btn-autopilot-fly" class="btn-aim highlight hidden" title="Automatically fly along the highway to the target planet!">
+            🚀 Fly to Planet
+          </button>
+          <!-- Highway toggle button -->
+          <button id="btn-toggle-highway" class="btn-aim hidden active" title="Toggle the golden Flight Highway line">
+            ✨ Highway Line
+          </button>
+          <!-- Brake / Slow Down button for manual landing/de-orbit -->
+          <button id="btn-aim-retrograde" class="btn-aim" title="Slow down to land or lower orbit">
+            🛑 Brake / Slow Down
+          </button>
+          <!-- Auto-Land button (Appears in orbit) -->
+          <button id="btn-auto-land" class="btn-aim highlight hidden" title="Softly land with parachutes & retro thrusters">
+            🪂 Auto-Land
+          </button>
         </div>
 
         <!-- Stage Separation Button (Big & punchy) -->

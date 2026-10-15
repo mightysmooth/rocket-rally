@@ -1,8 +1,10 @@
-// InputManager.ts - Keyboard, Touch D-Pad, and Thrust Controls
+// InputManager.ts - Keyboard, Touch D-Pad, and Camera-Relative Steering
+import * as THREE from 'three';
 import { RocketPhysics } from '../rocket/RocketPhysics';
 
 export class InputManager {
   private physics: RocketPhysics;
+  private camera: THREE.Camera;
 
   // Steering states
   public pitchUp: boolean = false;
@@ -15,10 +17,15 @@ export class InputManager {
   public onStageTrigger: (() => void) | null = null;
   public onTimeWarpChange: ((warp: number) => void) | null = null;
 
-  constructor(physics: RocketPhysics) {
+  constructor(physics: RocketPhysics, camera: THREE.Camera) {
     this.physics = physics;
+    this.camera = camera;
     this.setupKeyboardListeners();
     this.setupTouchControls();
+  }
+
+  public setCamera(camera: THREE.Camera): void {
+    this.camera = camera;
   }
 
   private setupKeyboardListeners(): void {
@@ -147,28 +154,31 @@ export class InputManager {
     }
   }
 
-  // Apply continuous steering and throttle every frame
+  // Apply camera-relative arcade steering and active SAS every frame
   public update(dt: number): void {
-    let pitch = 0;
-    let yaw = 0;
+    let screenX = 0;
+    let screenY = 0;
 
-    if (this.pitchUp) pitch += 1.0;
-    if (this.pitchDown) pitch -= 1.0;
-    if (this.yawLeft) yaw += 1.0;
-    if (this.yawRight) yaw -= 1.0;
+    if (this.yawLeft) screenX -= 1.0;
+    if (this.yawRight) screenX += 1.0;
+    if (this.pitchDown) screenY += 1.0; // Upwards on screen
+    if (this.pitchUp) screenY -= 1.0;   // Downwards on screen
 
-    if (pitch !== 0 || yaw !== 0) {
-      this.physics.steer(pitch, yaw, 0, dt);
+    if (screenX !== 0 || screenY !== 0) {
+      this.physics.steerScreenRelative(screenX, screenY, this.camera, dt);
+    } else {
+      this.physics.stabilizeSAS(dt);
     }
 
-    // Update throttle
-    if (this.physics.cruiseLocked) {
-      this.physics.setThrottle(1.0);
-    } else if (this.thrustActive) {
-      this.physics.setThrottle(1.0);
-    } else {
-      this.physics.setThrottle(0.0);
+    // Update throttle (respects automated flight if auto-ascent or autopilot is active)
+    if (!this.physics.isAutoFlying()) {
+      if (this.physics.cruiseLocked) {
+        this.physics.setThrottle(1.0);
+      } else if (this.thrustActive) {
+        this.physics.setThrottle(1.0);
+      } else {
+        this.physics.setThrottle(0.0);
+      }
     }
   }
 }
-

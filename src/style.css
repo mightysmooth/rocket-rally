@@ -715,9 +715,24 @@ html, body {
 }
 
 /* Guidance Autopilot Bar */
-.guidance-bar {
+/* Target Destination Bar (Step 1: Choose Planet) */
+.target-selector-bar {
   position: absolute;
   top: max(168px, calc(var(--safe-top) + 160px));
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: auto;
+  z-index: 15;
+}
+
+/* Guidance Autopilot Bar (Step 2: Fly to Planet & Guidance) */
+.guidance-bar {
+  position: absolute;
+  top: max(208px, calc(var(--safe-top) + 200px));
   left: 12px;
   right: 12px;
   display: flex;
@@ -743,7 +758,7 @@ html, body {
   backdrop-filter: blur(8px);
   border: 1.5px solid rgba(244, 162, 97, 0.4);
   color: var(--color-cream);
-  padding: 5px 10px;
+  padding: 5px 12px;
   border-radius: var(--radius-full);
   font-size: 0.75rem;
   font-weight: 700;
@@ -759,18 +774,31 @@ html, body {
   color: white;
 }
 
-/* Target Destination Bar */
-.target-selector-bar {
-  position: absolute;
-  top: max(206px, calc(var(--safe-top) + 198px));
-  left: 12px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  pointer-events: auto;
-  z-index: 15;
+.btn-aim.highlight {
+  background: linear-gradient(135deg, #f72585, #7209b7);
+  border-color: #ffd166;
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 0 14px rgba(247, 37, 133, 0.7);
+  animation: pulse-guidance 1.8s infinite ease-in-out;
+}
+
+.btn-aim.highlight.active {
+  background: linear-gradient(135deg, #e63946, #d62828);
+  border-color: #ffccd5;
+  box-shadow: 0 0 16px rgba(230, 57, 70, 0.85);
+  animation: none;
+}
+
+@keyframes pulse-guidance {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 10px rgba(247, 37, 133, 0.5);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 18px rgba(255, 209, 102, 0.9);
+  }
 }
 
 .target-title {
@@ -1348,13 +1376,13 @@ html, body {
     margin: 0 auto;
   }
 
-  .guidance-bar {
+  .target-selector-bar {
     top: max(68px, calc(var(--safe-top) + 60px));
     right: 12px;
     left: auto;
   }
 
-  .target-selector-bar {
+  .guidance-bar {
     top: max(110px, calc(var(--safe-top) + 102px));
     right: 12px;
     left: auto;

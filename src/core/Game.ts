@@ -78,7 +78,7 @@ export class Game {
     this.rocketPhysics = new RocketPhysics(this.rocketAssembly, this.solarSystem, this.particleEffects);
     this.trajectoryRenderer = new TrajectoryRenderer(this.scene, this.solarSystem);
     this.cameraManager = new CameraManager(this.camera);
-    this.inputManager = new InputManager(this.rocketPhysics);
+    this.inputManager = new InputManager(this.rocketPhysics, this.camera);
 
     // 5. UI Layers
     this.builderUI = new BuilderUI(this.rocketAssembly, this.soundSynth);
@@ -87,7 +87,8 @@ export class Game {
       this.cameraManager,
       this.solarSystem,
       this.soundSynth,
-      this.particleEffects
+      this.particleEffects,
+      this.trajectoryRenderer
     );
     this.scrapbookUI = new ScrapbookUI(this.soundSynth);
 
@@ -156,6 +157,20 @@ export class Game {
     // Bounce event
     this.rocketPhysics.onBounce = () => {
       this.soundSynth.playBounceBoing();
+    };
+
+    // Auto-stage during ascent
+    this.rocketPhysics.onAutoStage = () => {
+      this.flightHUD.triggerStage();
+      this.scrapbookUI.unlockBadge('staging');
+    };
+
+    // Arrived at destination orbit
+    this.rocketPhysics.onArrivedAtDestination = (body) => {
+      this.flightHUD.showArrivalBanner(body);
+      if (body.config.id === 'moon') this.scrapbookUI.unlockBadge('moon');
+      else if (body.config.id === 'red_mesa') this.scrapbookUI.unlockBadge('red_mesa');
+      else if (body.config.id === 'frostmoon') this.scrapbookUI.unlockBadge('frost');
     };
   }
 
@@ -329,6 +344,17 @@ export class Game {
         this.rocketPhysics.velocity,
         this.rocketPhysics.targetBodyId
       );
+
+      // Flight Highway Guidance Ribbon & Sparkles
+      const highwayInfo = this.trajectoryRenderer.updateHighway(
+        this.rocketPhysics.position,
+        this.rocketPhysics.targetBodyId,
+        dt
+      );
+      this.rocketPhysics.isOnHighway = highwayInfo.isOnHighway;
+      if (highwayInfo.isOnHighway && this.rocketPhysics.throttle > 0.05) {
+        this.particleEffects.emitHighwaySparkles(this.rocketPhysics.position);
+      }
 
       // HUD updates
       const telemetry = this.rocketPhysics.getTelemetry();
