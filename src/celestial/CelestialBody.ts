@@ -20,6 +20,7 @@ export interface CelestialBodyConfig {
   ringsInnerRadius?: number;
   ringsOuterRadius?: number;
   ringsTexture?: THREE.Texture;
+  soiRadius?: number;
 }
 
 export class CelestialBody {

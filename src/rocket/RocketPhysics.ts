@@ -504,8 +504,16 @@ export class RocketPhysics {
       this.position.copy(dominant.position).addScaledVector(toShip, r);
 
       const vCirc = Math.sqrt((1.0 * dominant.config.mass) / r); // Circular velocity
-      this.velocity.copy(dominant.velocity).addScaledVector(orbitTangent, vCirc);
-      const targetQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), orbitTangent);
+
+      // Exact orbital tangent perpendicular to toShip
+      const orbitPlaneNormal = new THREE.Vector3(0, 0, 1);
+      let circTangent = new THREE.Vector3().crossVectors(toShip, orbitPlaneNormal).normalize();
+      if (circTangent.lengthSq() < 0.1) {
+        circTangent = new THREE.Vector3(1, 0, 0);
+      }
+
+      this.velocity.copy(dominant.velocity).addScaledVector(circTangent, vCirc);
+      const targetQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), circTangent);
       this.quaternion.copy(targetQuat);
 
       this.autoAscentState = 'INACTIVE';

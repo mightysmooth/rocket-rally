@@ -44,7 +44,7 @@ export class SolarSystem {
       name: 'The Sun',
       emoji: '☀️',
       radius: 130,
-      mass: 1200000,
+      mass: 350000,
       color: 0xffb703,
       orbitRadius: 0,
       orbitSpeed: 0
@@ -61,6 +61,7 @@ export class SolarSystem {
       color: 0x3a7d44,
       orbitRadius: 650,
       orbitSpeed: 0.035,
+      soiRadius: 300,
       hasAtmosphere: true,
       atmosphereRadius: 105,
       atmosphereColor: 0x4cc9f0,
@@ -80,6 +81,7 @@ export class SolarSystem {
       orbitRadius: 140,
       orbitSpeed: 0.12,
       orbitParentId: 'hearthstone',
+      soiRadius: 55,
       hasAtmosphere: false,
       rotationSpeed: 0.02,
       texture: ProceduralTextures.createMoonTexture()
@@ -96,6 +98,7 @@ export class SolarSystem {
       color: 0xbf432b,
       orbitRadius: 1100,
       orbitSpeed: 0.022,
+      soiRadius: 280,
       hasAtmosphere: true,
       atmosphereRadius: 68,
       atmosphereColor: 0xe76f51,
@@ -114,6 +117,7 @@ export class SolarSystem {
       color: 0xedd1a6,
       orbitRadius: 1900,
       orbitSpeed: 0.012,
+      soiRadius: 520,
       hasAtmosphere: true,
       atmosphereRadius: 165,
       atmosphereColor: 0x58b4b7,
@@ -137,6 +141,7 @@ export class SolarSystem {
       orbitRadius: 240,
       orbitSpeed: 0.075,
       orbitParentId: 'gigantus',
+      soiRadius: 65,
       hasAtmosphere: false,
       rotationSpeed: 0.03,
       texture: ProceduralTextures.createFrostmoonTexture()
@@ -153,6 +158,7 @@ export class SolarSystem {
       color: 0xa8dadc,
       orbitRadius: 1450,
       orbitSpeed: 0.045,
+      soiRadius: 55,
       hasAtmosphere: true,
       atmosphereRadius: 32,
       atmosphereColor: 0x48cae4
@@ -346,25 +352,32 @@ export class SolarSystem {
     }
   }
 
-  // Find the primary gravitational body affecting a given point in space
+  // Find the primary gravitational body affecting a given point in space (Patched Conics Sphere of Influence)
   public getDominantBody(pos: THREE.Vector3): { body: CelestialBody; dist: number } {
-    let dominant: CelestialBody = this.getHearthstone();
-    let maxGravitationalForce = 0;
-    let minBodyDist = Infinity;
-
-    this.bodies.forEach(body => {
-      const dist = pos.distanceTo(body.position);
-      const effDist = Math.max(body.config.radius * 0.8, dist);
-      const force = body.config.mass / (effDist * effDist);
-
-      if (force > maxGravitationalForce) {
-        maxGravitationalForce = force;
-        dominant = body;
-        minBodyDist = dist;
+    // 1. Check moons first (highest hierarchy in sub-systems)
+    for (const body of this.bodies.values()) {
+      if (body.config.orbitParentId && body.config.soiRadius) {
+        const dist = pos.distanceTo(body.position);
+        if (dist <= body.config.soiRadius) {
+          return { body, dist };
+        }
       }
-    });
+    }
 
-    return { body: dominant, dist: minBodyDist };
+    // 2. Check primary planets (Hearthstone, Red Mesa, Gigantus, Comet)
+    for (const body of this.bodies.values()) {
+      if (!body.config.orbitParentId && body.config.id !== 'sun' && body.config.soiRadius) {
+        const dist = pos.distanceTo(body.position);
+        if (dist <= body.config.soiRadius) {
+          return { body, dist };
+        }
+      }
+    }
+
+    // 3. Otherwise in interplanetary space: The Sun is dominant
+    const sun = this.getBody('sun') || this.getHearthstone();
+    const sunDist = pos.distanceTo(sun.position);
+    return { body: sun, dist: sunDist };
   }
 }
 
